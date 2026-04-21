@@ -94,5 +94,5 @@ export interface MCPTool {
 }
 
 // Config file locations
-export const GLOBAL_CONFIG_PATH = "~/.pi/mcp.json";
-export const LOCAL_CONFIG_PATH = "./mcp.json";
+export const GLOBAL_CONFIG_PATH = "~/.pi/agent/mcp.json";
+export const LOCAL_CONFIG_PATH = ".pi/mcp.json";

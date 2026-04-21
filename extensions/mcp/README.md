@@ -9,8 +9,8 @@ Copy this directory to `~/.pi/agent/extensions/mcp/` or your project's `.pi/exte
 ## Configuration
 
 Create `mcp.json` in one of these locations:
-- `~/.pi/mcp.json` (global)
-- `./mcp.json` (project-local, overrides global)
+- `.pi/mcp.json` (project-local, takes precedence)
+- `~/.pi/agent/mcp.json` (global)
 
 ### Example Configuration
 
@@ -117,7 +117,32 @@ mcp__github__create_issue
 ## Commands
 
 - `/mcp` - Show server status and manage connections
+- `/mcp help` - Show help for MCP commands and features
 - `/mcp <server>` - Reconnect to a specific server
+
+### Via `/mcp` Status UI
+
+Run `/mcp` to open the interactive server list:
+
+- **Enter** - Toggle connected/disconnected
+- **Space** - Toggle enabled/disabled
+- **↑/↓** or **j/k** - Navigate
+- **Esc** - Close
+
+### Via Command Line
+
+## Enabling/Disabling Servers
+
+Servers can be disabled to prevent them from auto-connecting on startup:
+
+- **Disable**: Disconnects the server and prevents auto-connect on future sessions
+- **Enable**: Re-enables auto-connect and connects immediately
+
+Disabled servers are persisted in `~/.pi/agent/mcp-state.json`.
+
+### Via `/mcp` Command
+
+Run `/mcp help` for full usage details.
 
 ## Example MCP Servers
 
@@ -168,10 +193,11 @@ mcp__github__create_issue
 ## How It Works
 
 1. On session start, the extension loads configuration from `mcp.json`
-2. It connects to all configured MCP servers
-3. Tools from each server are discovered and registered as pi tools
-4. When you call an MCP tool, the request is forwarded to the MCP server
-5. Results are converted and returned to pi
+2. It loads disabled server state from `~/.pi/agent/mcp-state.json`
+3. It connects to all non-disabled configured MCP servers
+4. Tools from each server are discovered and registered as pi tools
+5. When you call an MCP tool, the request is forwarded to the MCP server
+6. Results are converted and returned to pi
 
 ## Troubleshooting
 
@@ -197,6 +223,7 @@ This extension implements Phase 1 of MCP support:
 - [x] SSE transport
 - [x] Tool discovery and registration
 - [x] Tool execution proxying
+- [x] Enable/disable servers (persisted across sessions)
 - [ ] WebSocket transport
 - [ ] Server instructions in system prompt
 - [ ] Resource support
