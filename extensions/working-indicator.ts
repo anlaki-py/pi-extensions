@@ -1,4 +1,7 @@
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext, WorkingIndicatorOptions } from "@mariozechner/pi-coding-agent";
+import { getAgentDir } from "@mariozechner/pi-coding-agent";
 
 /**
  * CONFIGURATION: Add new spinners here!
@@ -72,8 +75,33 @@ function getIndicatorOptions(mode: SpinnerKey | "default"): WorkingIndicatorOpti
   };
 }
 
+const CONFIG_PATH = join(getAgentDir(), "working-indicator.json");
+
+function loadConfig(): SpinnerKey | "default" {
+  if (!existsSync(CONFIG_PATH)) return "spinner";
+  try {
+    const content = readFileSync(CONFIG_PATH, "utf-8");
+    const parsed = JSON.parse(content) as { mode?: string };
+    const mode = parsed.mode;
+    if (mode === "default" || (mode && mode in SPINNER_CONFIGS)) {
+      return mode as SpinnerKey | "default";
+    }
+  } catch {
+    // ignore bad config
+  }
+  return "spinner";
+}
+
+function saveConfig(mode: SpinnerKey | "default") {
+  try {
+    writeFileSync(CONFIG_PATH, JSON.stringify({ mode }, null, 2) + "\n", "utf-8");
+  } catch {
+    // silently fail if we can't write
+  }
+}
+
 export default function (pi: ExtensionAPI) {
-  let currentMode: SpinnerKey | "default" = "spinner";
+  let currentMode: SpinnerKey | "default" = loadConfig();
 
   const applyIndicator = (ctx: ExtensionContext) => {
     const options = getIndicatorOptions(currentMode);
@@ -108,6 +136,7 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
+      saveConfig(currentMode);
       applyIndicator(ctx);
       const newDesc = currentMode === "default" ? "pi default" : SPINNER_CONFIGS[currentMode].description;
       ctx.ui.notify(`Working indicator set to: ${newDesc}`, "info");
