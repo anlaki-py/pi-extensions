@@ -1,65 +1,80 @@
 # Plan Mode Extension
 
-Read-only exploration mode for safe code analysis.
+Read-only exploration mode for safe code analysis, followed by tracked execution.
+
+## Architecture
+
+The extension is split into focused modules:
+
+| File | Responsibility |
+|------|---------------|
+| `constants.ts` | Tool lists, command names, prompt fragments, regex patterns |
+| `types.ts` | Shared TypeScript interfaces and message helpers |
+| `safety.ts` | Bash allowlist/blocklist for read-only mode |
+| `parser.ts` | Extract numbered plan steps from assistant messages |
+| `state.ts` | PlanState CRUD, persistence (`appendEntry`), scoped resume reconstruction |
+| `ui.ts` | ASCII-only progress bars, widgets, footer status, notifications |
+| `execution.ts` | Step lifecycle, heuristic completion, file-change tracking, rollback reports |
+| `index.ts` | Event handlers, commands, shortcuts, custom tool registration |
 
 ## Features
 
-- **Read-only tools**: Restricts available tools to read, bash, grep, find, ls, question
-- **Bash allowlist**: Only read-only bash commands are allowed
-- **Plan extraction**: Extracts numbered steps from `Plan:` sections
-- **Progress tracking**: Widget shows completion status during execution
-- **[DONE:n] markers**: Explicit step completion tracking
-- **Session persistence**: State survives session resume
+- **Read-only planning**: Only `read`, `bash`, `grep`, `find`, `ls`, `questionnaire` available. Bash restricted to an allowlist.
+- **Structured completion**: The agent calls `plan_step_complete(step_number, status)` instead of emitting `[DONE:n]` tags.
+- **Heuristic fallback**: If the agent forgets the tool, prose mentions like "step 2 is complete" are detected.
+- **Progress tracking**: ASCII widget shows `[x]`, `[ ]`, `[>]`, `[!]`, `[-]` states with a progress bar.
+- **Session resilience**: Each plan has a UUID. Resume scans only entries after the matching execution marker.
+- **Collaborative refinement**: Add, insert, skip, retry, or manually mark steps during execution via commands.
+- **Error handling & rollback**: Tracks which files each step modified. `/plan-rollback` shows `git checkout` suggestions.
 
 ## Commands
 
-- `/plan` - Toggle plan mode
-- `/todos` - Show current plan progress
-- `Ctrl+Alt+P` - Toggle plan mode (shortcut)
+| Command | Description |
+|---------|-------------|
+| `/plan` | Toggle plan mode, or show menu if active |
+| `/plan-status` | Display current plan with step states |
+| `/plan-skip <n>` | Skip step number n |
+| `/plan-done <n>` | Manually mark step n complete |
+| `/plan-retry <n>` | Retry a failed step |
+| `/plan-add <text>` | Append a new step at the end |
+| `/plan-insert <after> <text>` | Insert a step after step number |
+| `/plan-reset` | Reset plan back to planning mode |
+| `/plan-rollback` | Show modified files and suggested git commands |
 
-## Usage
+## Shortcuts
 
-1. Enable plan mode with `/plan` or `--plan` flag
-2. Ask the agent to analyze code and create a plan
-3. The agent should output a numbered plan under a `Plan:` header:
+- `Ctrl+Alt+P` — Toggle plan mode
 
-```
-Plan:
-1. First step description
-2. Second step description
-3. Third step description
-```
+## Flags
 
-4. Choose "Execute the plan" when prompted
-5. During execution, the agent marks steps complete with `[DONE:n]` tags
-6. Progress widget shows completion status
+- `--plan` — Start session in plan mode
 
 ## How It Works
 
-### Plan Mode (Read-Only)
-- Only read-only tools available
-- Bash commands filtered through allowlist
-- Agent creates a plan without making changes
+### Planning Phase
+1. Enable plan mode with `/plan` or `--plan`.
+2. The system prompt is appended with plan-mode instructions (no message pollution).
+3. The agent analyzes code read-only and outputs a numbered `Plan:` section.
+4. The extension parses the plan into structured steps.
 
-### Execution Mode
-- Full tool access restored
-- Agent executes steps in order
-- `[DONE:n]` markers track completion
-- Widget shows progress
+### Execution Phase
+1. Choose "Execute plan" from the menu or run `/plan` again.
+2. Full tool access is restored, plus the `plan_step_complete` tool.
+3. The system prompt shows the current step, next step, and remaining list.
+4. After each step, the agent calls `plan_step_complete(step_number, "complete")`.
+5. If the step fails, the agent calls `plan_step_complete(step_number, "failed", reason)`.
 
-### Command Allowlist
+### Progress Tracking
+- The footer shows `[EXEC 2/5] step 3`.
+- The widget above the editor shows an ASCII progress bar and checkbox list.
+- When all steps are done, the plan auto-completes and full access is restored.
 
-Safe commands (allowed):
-- File inspection: `cat`, `head`, `tail`, `less`, `more`
-- Search: `grep`, `find`, `rg`, `fd`
-- Directory: `ls`, `pwd`, `tree`
-- Git read: `git status`, `git log`, `git diff`, `git branch`
-- Package info: `npm list`, `npm outdated`, `yarn info`
-- System info: `uname`, `whoami`, `date`, `uptime`
+### Session Resume
+- Plan state is persisted via `appendEntry` after every mutation.
+- On resume, the latest state is restored.
+- If resuming in execution mode, entries are scanned from the matching execution marker forward.
+- `plan_step_complete` tool results and heuristic text patterns rebuild completion state.
 
-Blocked commands:
-- File modification: `rm`, `mv`, `cp`, `mkdir`, `touch`
-- Git write: `git add`, `git commit`, `git push`
-- Package install: `npm install`, `yarn add`, `pip install`
-- System: `sudo`, `kill`, `reboot`
-- Editors: `vim`, `nano`, `code`
+### Rollback
+- Every `write` and `edit` during execution is tracked per-step.
+- `/plan-rollback` prints a report of all modified files with suggested git commands.
